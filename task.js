@@ -60,11 +60,6 @@ function simulateExhibitionMatches(exhibitionData, teams) {
   return teamForm
 }
 
-// Calculate and adjust team forms based on exhibtion matches and ongoing results 
-function calculateTeamForm(exhibitionData, teams) {
-
-}
-
 // Simulate all group stage matches based on the FIBA rankings and team form, generating scores for each match
 function simulateGroupStageMatches(groupsData, rankings, teamForm, pointsTable) {
   const groupFixtures = {}
@@ -88,7 +83,7 @@ function simulateGroupStageMatches(groupsData, rankings, teamForm, pointsTable) 
 
         const [team1Score, team2Score] = determineMatchOutcome(team1, team2, rankings, teamForm)
 
-        let { outcome, surrenderedTeam } = getMathcOutcome(team1, team2, team1Score, team2Score)
+        let { outcome, surrenderedTeam } = getMatchOutcome(team1, team2, team1Score, team2Score)
 
         updatePointsTable(pointsTable, team1, team2, team1Score, team2Score, outcome)
 
@@ -172,7 +167,7 @@ function initializePointsTable(teams) {
   return pointsTable
 }
 
-function getMathcOutcome(team1, team2, team1Score, team2Score) {
+function getMatchOutcome(team1, team2, team1Score, team2Score) {
   const randomChance = Math.random()
   const surrenderProbability = 0.05
 
@@ -232,11 +227,6 @@ function updatePointsTable(pointsTable, team1, team2, team1Score, team2Score, ou
   pointsTable[team2].points += points[team2]
   pointsTable[team1].scoreDifference += scoreDifference
   pointsTable[team2].scoreDifference -= scoreDifference
-}
-
-// Update the standings of each group based on match outcomes, keeping track of wins, losses, points, and score differneces
-function updateGroupStandings(groupsData, pointsTable) {
-
 }
 
 // Rank teams within each group based on points, score difference, and other tie-breaking criteria
@@ -324,9 +314,55 @@ function calculateRoundRobinDifference(team, matches) {
 }
 
 // Rank the top teams from each group to assign rankings for knockout stage seeding
-function rankTopTeamsForKnockoutStage(groupsData) {
+function rankTeamsAfterGroupStage(groupsData, pointsTable) {
   // Sort teams by metrics: points, score difference, and total points scored
   // Return an ordered list of teams for knockout seedings 
+  const rankedTeams = { first: [], second: [], third: [] }
+
+  for (const group in groupsData) {
+    const teams = groupsData[group].map(t => t.ISOCode)
+
+    rankedTeams.first.push(teams[0])
+    rankedTeams.second.push(teams[1])
+    rankedTeams.third.push(teams[2])
+  }
+
+  rankedTeams.first = rankTeamsByCriteria(rankedTeams.first, pointsTable)
+  rankedTeams.second = rankTeamsByCriteria(rankedTeams.second, pointsTable)
+  rankedTeams.third = rankTeamsByCriteria(rankedTeams.third, pointsTable)
+
+  return rankedTeams
+}
+
+function rankTeamsByCriteria(teams, pointsTable) {
+  return teams.sort((teamA, teamB) => {
+    const pointsA = pointsTable[teamA].points
+    const pointsB = pointsTable[teamB].points
+
+    if (pointsA !== pointsB) {
+      return pointsB - pointsA
+    }
+
+    const scoreDifferenceA = pointsTable[teamA].scoreDifference
+    const scoreDifferenceB = pointsTable[teamB].scoreDifference
+
+    if (scoreDifferenceA !== scoreDifferenceB) {
+      return scoreDifferenceB - scoreDifferenceA
+    }
+
+    const scoredPointsA = pointsTable[teamA].scoredPoints
+    const scoredPointsB = pointsTable[teamB].scoredPoints
+
+    return scoredPointsB - scoredPointsA
+  })
+}
+
+function getTopTeamsAfterGroupStage(rankedTeams) {
+  return [
+    ...rankedTeams.first.slice(0, 3),
+    ...rankedTeams.second.slice(0, 3),
+    ...rankedTeams.third.slice(0, 3)
+  ]
 }
 
 // Determine knockout stage seedings based on group performance
@@ -423,6 +459,18 @@ function printFixturesByGroupPhase(groupFixtures, formUpdates) {
   }
 }
 
+function displayFinalRanking(topTeams) {
+  console.log("Final Rankings:")
+
+  for (let i = 0; i < topTeams.length; i++) {
+    console.log(`${i + 1}. ${topTeams[i]}`)
+
+    if (i === 7) {
+      console.log("-------- Teams below this line are eliminated --------")
+    }
+  }
+}
+
 async function main() {
   try {
     const groupsData = await readJSONFile(path.join(__dirname, 'groups.json'))
@@ -445,6 +493,13 @@ async function main() {
     const { groupFixtures, formUpdates } = simulateGroupStageMatches(groupsData, FIBARankings, teamForm, pointsTable)
 
     printFixturesByGroupPhase(groupFixtures, formUpdates)
+
+    const rankedTeams = rankTeamsAfterGroupStage(groupsData, pointsTable)
+    const topTeams = getTopTeamsAfterGroupStage(rankedTeams)
+
+    displayFinalRanking(topTeams);
+
+    console.log(`Teams that advance to the knockout stage: ${topTeams.slice(0, 8).join(", ")}`)
   } catch (err) {
     console.error(err)
   }
