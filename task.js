@@ -1,4 +1,3 @@
-const { group } = require('console')
 const fs = require('fs')
 const path = require('path')
 
@@ -123,6 +122,8 @@ function simulateGroupStageMatches(groupsData, rankings, teamForm, pointsTable) 
     }
   }
 
+  rankTeamsWithinGroups(groupsData, pointsTable, groupFixtures)
+
   printGroupStageResultsAndStandings(groupsData, pointsTable)
 
   return { groupFixtures, formUpdates }
@@ -239,8 +240,87 @@ function updateGroupStandings(groupsData, pointsTable) {
 }
 
 // Rank teams within each group based on points, score difference, and other tie-breaking criteria
-function rankTeamsWithinGroups(groupsData) {
+function rankTeamsWithinGroups(groupsData, pointsTable, groupFixtures) {
+  for (const group in groupsData) {
+    const teams = groupsData[group].map(t => t.ISOCode)
 
+    teams.sort((teamA, teamB) => {
+      const pointsA = pointsTable[teamA].points
+      const pointsB = pointsTable[teamB].points
+
+      if (pointsA !== pointsB) {
+        return pointsB - pointsA
+      }
+
+      return resolveTieBetweenTeams(group, teamA, teamB, groupFixtures)
+    })
+
+    groupsData[group] = teams.map(isoCode => ({ ISOCode: isoCode }))
+  }
+}
+
+function resolveTieBetweenTeams(group, teamA, teamB, groupFixtures) {
+  const matches = getAllMatchesForGroup(groupFixtures, group)
+
+  // Filter matches for head-to-head results between the two teams
+  const headToHeadMatches = matches.filter(match =>
+    (match.match.includes(`${teamA} vs ${teamB}`) || match.match.includes(`${teamB} vs ${teamA}`))
+  )
+
+  if (headToHeadMatches.length > 0) {
+    let teamAScore = 0
+    let teamBScore = 0
+
+    headToHeadMatches.forEach(match => {
+      const [scoreA, scoreB] = match.score.split('-').map(Number)
+
+      if (match.match.includes(teamA)) {
+        teamAScore += scoreA
+        teamBScore += scoreB
+      } else {
+        teamAScore += scoreB
+        teamBScore += scoreA
+      }
+    })
+
+    const headToHeadDifference = teamAScore - teamBScore
+
+    if (headToHeadDifference !== 0) {
+      return headToHeadDifference
+    }
+  }
+
+  // Calculate the round-robin difference for the teams within the tied teams
+  const roundRobinDifferenceA = calculateRoundRobinDifference(teamA, matches)
+  const roundRobinDifferenceB = calculateRoundRobinDifference(teamB, matches)
+
+  return roundRobinDifferenceB - roundRobinDifferenceA
+}
+
+function getAllMatchesForGroup(groupFixtures, group) {
+  let matches = []
+
+  console.log(groupFixtures[group])
+
+  for (const fixture of groupFixtures[group]) {
+    matches = matches.concat(fixture)
+  }
+
+  return matches
+}
+
+function calculateRoundRobinDifference(team, matches) {
+  let totalRoundRobinDifference = 0
+
+  matches.forEach(match => {
+    if (match.match.includes(team)) {
+      const [score1, score2] = match.score.split('-').map(Number)
+      const isTeam1 = match.match.startsWith(team)
+      totalRoundRobinDifference += isTeam1 ? (score1 - score2) : (score2 - score1)
+    }
+  })
+
+  return totalRoundRobinDifference
 }
 
 // Rank the top teams from each group to assign rankings for knockout stage seeding
@@ -263,24 +343,9 @@ function printGroupStageResultsAndStandings(groupsData, pointsTable) {
   for (const group in groupsData) {
     console.log(`Group ${group}`)
 
-    const teams = groupsData[group].map(t => t.ISOCode)
-
-    teams.sort((a, b) => {
-      const teamA = pointsTable[a]
-      const teamB = pointsTable[b]
-
-      if (teamA.points !== teamB.points) {
-        return teamB.points - teamA.points
-      }
-
-      if (teamA.points === teamB.points) {
-
-      }
-
-      return 0
-    })
-
     const teamStats = []
+
+    const teams = groupsData[group].map(team => team.ISOCode)
 
     let rank = 1
 
@@ -321,7 +386,7 @@ function adjustTeamFormBasedOnMatchOutcome(team1, team2, team1Score, team2Score,
   }
 }
 
-function displayTeamForm(teamForm) {
+function displayInitialTeamForm(teamForm) {
   console.log('Updated team form after exhibition matches:')
 
   for (const [team, form] of Object.entries(teamForm)) {
@@ -342,7 +407,7 @@ function printFixturesByGroupPhase(groupFixtures, formUpdates) {
 
       groupFixtures[group][phase].forEach(match => {
         if (match.outcome === 'surrender') {
-          console.log(` ${match.match} - Outcome: ${match.outcome}, Surrendered Team: ${match.surrenderedTeam}`);
+          console.log(` ${match.match} - Outcome: ${match.outcome}, Surrendered Team: ${match.surrenderedTeam}`)
         } else {
           console.log(` ${match.match} (${match.score})`)
 
@@ -366,7 +431,7 @@ async function main() {
     let teams = Object.keys(exhibitionData)
     const teamForm = simulateExhibitionMatches(exhibitionData, teams)
 
-    displayTeamForm(teamForm)
+    // displayInitialTeamForm(teamForm)
 
     const pointsTable = initializePointsTable(teams)
 
