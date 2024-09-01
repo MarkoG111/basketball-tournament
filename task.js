@@ -61,7 +61,7 @@ function simulateExhibitionMatches(exhibitionData, teams) {
 }
 
 // Simulate all group stage matches based on the FIBA rankings and team form, generating scores for each match
-function simulateGroupStageMatches(groupsData, rankings, teamForm, pointsTable) {
+function simulateGroupStageMatches(groupsData, FIBARankings, teamForm, pointsTable) {
   const groupFixtures = {}
   const formUpdates = {}
 
@@ -81,7 +81,7 @@ function simulateGroupStageMatches(groupsData, rankings, teamForm, pointsTable) 
         const team1 = teams[i]
         const team2 = teams[totalTeams - 1 - i]
 
-        const [team1Score, team2Score] = determineMatchOutcome(team1, team2, rankings, teamForm)
+        const [team1Score, team2Score] = determineMatchOutcome(team1, team2, FIBARankings, teamForm)
 
         let { outcome, surrenderedTeam } = getMatchOutcome(team1, team2, team1Score, team2Score)
 
@@ -125,12 +125,12 @@ function simulateGroupStageMatches(groupsData, rankings, teamForm, pointsTable) 
 }
 
 // Determine the outcome of a match based on FIBA rankings and other factors like team form 
-function determineMatchOutcome(team1, team2, rankings, teamForm) {
+function determineMatchOutcome(team1, team2, FIBARankings, teamForm) {
   const minScore = 44
   const maxScore = 122
 
-  const ranking1 = rankings[team1]
-  const ranking2 = rankings[team2]
+  const ranking1 = FIBARankings[team1]
+  const ranking2 = FIBARankings[team2]
 
   const form1 = teamForm[team1].toFixed(2)
   const form2 = teamForm[team2].toFixed(2)
@@ -290,8 +290,6 @@ function resolveTieBetweenTeams(group, teamA, teamB, groupFixtures) {
 function getAllMatchesForGroup(groupFixtures, group) {
   let matches = []
 
-  console.log(groupFixtures[group])
-
   for (const fixture of groupFixtures[group]) {
     matches = matches.concat(fixture)
   }
@@ -306,6 +304,7 @@ function calculateRoundRobinDifference(team, matches) {
     if (match.match.includes(team)) {
       const [score1, score2] = match.score.split('-').map(Number)
       const isTeam1 = match.match.startsWith(team)
+
       totalRoundRobinDifference += isTeam1 ? (score1 - score2) : (score2 - score1)
     }
   })
@@ -366,10 +365,105 @@ function getTopTeamsAfterGroupStage(rankedTeams) {
 }
 
 // Determine knockout stage seedings based on group performance
-function determineKnockoutStageSeedings(rankedTeams) {
+function determineKnockoutStageSeedings(rankedTeams, groupsData) {
   // Divide teams into pots (D, E, F, G) based on their rankings 
   // Create quarterfinal matchups avoiding same-group matchups
   // Rerturn an object representing the knkockout stage matchups
+  const potD = [rankedTeams.first[0], rankedTeams.first[1]]
+  const potE = [rankedTeams.first[2], rankedTeams.second[0]]
+  const potF = [rankedTeams.second[1], rankedTeams.second[2]]
+  const potG = [rankedTeams.third[0], rankedTeams.third[1]]
+
+  const originalPots = {
+    D: [...potD],
+    E: [...potE],
+    F: [...potF],
+    G: [...potG],
+  }
+
+  // A better shuffle function that does not mutate the original array
+  function shuffle(array) {
+    const shuffledArray = array.slice() // Create a copy of the array
+
+    for (let i = shuffledArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+
+      [shuffledArray[i], shuffledArray[j]] = [shuffledArray[j], shuffledArray[i]]; // Swap elements
+    }
+
+    return shuffledArray
+  }
+
+  const shuffledPotD = shuffle(potD)
+  const shuffledPotE = shuffle(potE)
+  const shuffledPotF = shuffle(potF)
+  const shuffledPotG = shuffle(potG)
+
+  let knockoutMatchups = []
+
+  function createMatchup(pot1, pot2) {
+    while (pot1.length > 0) {
+      let team1 = pot1.shift()
+      let matched = false
+
+      for (let i = 0; i < pot2.length; i++) {
+        let team2 = pot2[i]
+
+        if (!wereInSameGroup(team1, team2, groupsData)) {
+          knockoutMatchups.push({ home: team1, away: team2 })
+          pot2.splice(i, 1)
+          matched = true
+          break
+        }
+      }
+
+      if (!matched && pot2.length > 0) {
+        let team2 = pot2.shift()
+        knockoutMatchups.push({ home: team1, away: team2 })
+      }
+    }
+  }
+
+  function wereInSameGroup(team1, team2, groupsData) {
+    for (const group in groupsData) {formattedDraw
+      const teamsInGroup = groupsData[group].map(team => team.ISOCode)
+
+      if (teamsInGroup.includes(team1) && teamsInGroup.includes(team2)) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  createMatchup(shuffledPotD, shuffledPotG)
+  createMatchup(shuffledPotE, shuffledPotF)
+
+  const formattedOutput = {
+    pots: originalPots,
+    quarterfinals: knockoutMatchups
+  }
+
+  return formattedOutput
+}
+
+function formatDrawOutput(result) {
+  let output = 'Pots:\n'
+
+  for (const [potName, teams] of Object.entries(result.pots)) {
+    output += `    Pot ${potName}\n`
+    teams.forEach(team => {
+      output += `        ${team}\n`
+    })
+  }
+
+  output += '\n Elimination round: \n'
+
+  result.quarterfinals.forEach(matchup => {
+    output += `    ${matchup.home} - ${matchup.away}\n`
+  })
+
+  return output
 }
 
 // Print the results and standings after the group stage 
@@ -469,6 +563,8 @@ function displayFinalRanking(topTeams) {
       console.log("-------- Teams below this line are eliminated --------")
     }
   }
+
+  console.log(`Teams that advance to the knockout stage: ${topTeams.slice(0, 8).join(", ")}`)
 }
 
 async function main() {
@@ -479,7 +575,7 @@ async function main() {
     let teams = Object.keys(exhibitionData)
     const teamForm = simulateExhibitionMatches(exhibitionData, teams)
 
-    // displayInitialTeamForm(teamForm)
+    displayInitialTeamForm(teamForm)
 
     const pointsTable = initializePointsTable(teams)
 
@@ -497,9 +593,13 @@ async function main() {
     const rankedTeams = rankTeamsAfterGroupStage(groupsData, pointsTable)
     const topTeams = getTopTeamsAfterGroupStage(rankedTeams)
 
-    displayFinalRanking(topTeams);
+    displayFinalRanking(topTeams)
 
-    console.log(`Teams that advance to the knockout stage: ${topTeams.slice(0, 8).join(", ")}`)
+    const knockoutTeams = determineKnockoutStageSeedings(rankedTeams, groupsData)
+
+    const formattedDraw = formatDrawOutput(knockoutTeams)
+    console.log(formattedDraw);
+
   } catch (err) {
     console.error(err)
   }
