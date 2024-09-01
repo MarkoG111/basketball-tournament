@@ -66,7 +66,7 @@ function simulateGroupStageMatches(groupsData, FIBARankings, teamForm, pointsTab
   const formUpdates = {}
 
   for (const group in groupsData) {
-    const teams = groupsData[group].map(t => t.ISOCode)
+    const teams = groupsData[group].map(t => t)
 
     const totalFixtures = teams.length - 1
     const totalTeams = teams.length
@@ -81,32 +81,32 @@ function simulateGroupStageMatches(groupsData, FIBARankings, teamForm, pointsTab
         const team1 = teams[i]
         const team2 = teams[totalTeams - 1 - i]
 
-        const [team1Score, team2Score] = determineMatchOutcome(team1, team2, FIBARankings, teamForm)
+        const [team1Score, team2Score] = determineMatchOutcome(team1.ISOCode, team2.ISOCode, FIBARankings, teamForm)
 
-        let { outcome, surrenderedTeam } = getMatchOutcome(team1, team2, team1Score, team2Score)
+        let { outcome, surrenderedTeam } = getMatchOutcome(team1.ISOCode, team2.ISOCode, team1Score, team2Score)
 
-        updatePointsTable(pointsTable, team1, team2, team1Score, team2Score, outcome)
+        updatePointsTable(pointsTable, team1.Team, team2.Team, team1Score, team2Score, outcome)
 
-        const originalFormTeam1 = teamForm[team1]
-        const originalFormTeam2 = teamForm[team2]
+        const originalFormTeam1 = teamForm[team1.ISOCode]
+        const originalFormTeam2 = teamForm[team2.ISOCode]
 
         // Adjust team form based on match result
-        adjustTeamFormBasedOnMatchOutcome(team1, team2, team1Score, team2Score, teamForm)
+        adjustTeamFormBasedOnMatchOutcome(team1.ISOCode, team2.ISOCode, team1Score, team2Score, teamForm)
 
         formUpdates[group].push({
-          match: `${team1} vs ${team2}`,
+          match: `${team1.Team} vs ${team2.Team}`,
           score: `${Math.round(team1Score)}-${Math.round(team2Score)}`,
           formUpdates: [
-            { team: team1, from: originalFormTeam1, to: teamForm[team1] },
-            { team: team2, from: originalFormTeam2, to: teamForm[team2] }
+            { team: team1.Team, from: originalFormTeam1, to: teamForm[team1.ISOCode] },
+            { team: team2.Team, from: originalFormTeam2, to: teamForm[team2.ISOCode] }
           ]
         })
 
         fixtureMatches.push({
-          match: `${team1} vs ${team2}`,
+          match: `${team1.Team} vs ${team2.Team}`,
           score: `${Math.round(team1Score)}-${Math.round(team2Score)}`,
           outcome: outcome,
-          surrenderedTeam: surrenderedTeam
+          surrenderedTeam: surrenderedTeam ? teams.find(team => team.ISOCode === surrenderedTeam).Team : null
         })
       }
 
@@ -119,7 +119,6 @@ function simulateGroupStageMatches(groupsData, FIBARankings, teamForm, pointsTab
 
   rankTeamsWithinGroups(groupsData, pointsTable, groupFixtures)
 
-  printGroupStageResultsAndStandings(groupsData, pointsTable)
 
   return { groupFixtures, formUpdates }
 }
@@ -150,10 +149,12 @@ function determineMatchOutcome(team1, team2, FIBARankings, teamForm) {
   return [finalScore1, finalScore2]
 }
 
-function initializePointsTable(teams) {
+function initializePointsTable(teams, ISOToTeamName) {
   const pointsTable = {}
 
-  for (const team of teams) {
+  const fullTeamNames = teams.map(isoCode => ISOToTeamName[isoCode])
+
+  for (const team of fullTeamNames) {
     pointsTable[team] = {
       points: 0,
       wins: 0,
@@ -232,7 +233,7 @@ function updatePointsTable(pointsTable, team1, team2, team1Score, team2Score, ou
 // Rank teams within each group based on points, score difference, and other tie-breaking criteria
 function rankTeamsWithinGroups(groupsData, pointsTable, groupFixtures) {
   for (const group in groupsData) {
-    const teams = groupsData[group].map(t => t.ISOCode)
+    const teams = groupsData[group].map(t => t.Team)
 
     teams.sort((teamA, teamB) => {
       const pointsA = pointsTable[teamA].points
@@ -425,8 +426,8 @@ function determineKnockoutStageSeedings(rankedTeams, groupsData) {
   }
 
   function wereInSameGroup(team1, team2, groupsData) {
-    for (const group in groupsData) {formattedDraw
-      const teamsInGroup = groupsData[group].map(team => team.ISOCode)
+    for (const group in groupsData) {
+      const teamsInGroup = groupsData[group].map(team => team.Team)
 
       if (teamsInGroup.includes(team1) && teamsInGroup.includes(team2)) {
         return true
@@ -496,11 +497,11 @@ function printGroupStageResultsAndStandings(groupsData, pointsTable) {
       rank++
     }
 
-    console.log(`Rank | Team | Points | Wins | Losses | ScoredPoints | ReceivedPoints | Difference`)
+    console.log(`Rank | Team               | Points | Wins | Losses | ScoredPoints | ReceivedPoints | Difference`)
 
     teamStats.forEach(({ Rank, Team, Points, Wins, Losses, ScoredPoints, ReceivedPoints, Difference }) => {
       const formattedDifference = Difference >= 0 ? `+${Difference}` : `${Difference}`
-      console.log(`${Rank.toString().padEnd(4)} | ${Team.padEnd(4)} | ${Points.toString().padEnd(6)} | ${Wins.toString().padEnd(4)} | ${Losses.toString().padEnd(6)} | ${ScoredPoints.toString().padEnd(12)} | ${ReceivedPoints.toString().padEnd(14)} | ${formattedDifference}`)
+      console.log(`${Rank.toString().padEnd(4)} | ${Team.padEnd(18)} | ${Points.toString().padEnd(6)} | ${Wins.toString().padEnd(4)} | ${Losses.toString().padEnd(6)} | ${ScoredPoints.toString().padEnd(12)} | ${ReceivedPoints.toString().padEnd(14)} | ${formattedDifference}`)
     })
   }
 }
@@ -575,9 +576,17 @@ async function main() {
     let teams = Object.keys(exhibitionData)
     const teamForm = simulateExhibitionMatches(exhibitionData, teams)
 
+
+    const ISOToTeamName = {}
+    for (const group of Object.values(groupsData)) {
+      for (const team of group) {
+        ISOToTeamName[team.ISOCode] = team.Team
+      }
+    }
+
     displayInitialTeamForm(teamForm)
 
-    const pointsTable = initializePointsTable(teams)
+    const pointsTable = initializePointsTable(teams, ISOToTeamName)
 
     const FIBARankings = {}
     for (const group in groupsData) {
@@ -589,6 +598,7 @@ async function main() {
     const { groupFixtures, formUpdates } = simulateGroupStageMatches(groupsData, FIBARankings, teamForm, pointsTable)
 
     printFixturesByGroupPhase(groupFixtures, formUpdates)
+    printGroupStageResultsAndStandings(groupsData, pointsTable)
 
     const rankedTeams = rankTeamsAfterGroupStage(groupsData, pointsTable)
     const topTeams = getTopTeamsAfterGroupStage(rankedTeams)
@@ -598,8 +608,7 @@ async function main() {
     const knockoutTeams = determineKnockoutStageSeedings(rankedTeams, groupsData)
 
     const formattedDraw = formatDrawOutput(knockoutTeams)
-    console.log(formattedDraw);
-
+    console.log(formattedDraw)
   } catch (err) {
     console.error(err)
   }
