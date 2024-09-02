@@ -447,7 +447,7 @@ function determineKnockoutStageSeedings(rankedTeams, groupsData) {
   return formattedOutput
 }
 
-function formatDrawOutput(result) {
+function printDraw(result) {
   let output = 'Pots:\n'
 
   for (const [potName, teams] of Object.entries(result.pots)) {
@@ -457,7 +457,7 @@ function formatDrawOutput(result) {
     })
   }
 
-  output += '\n Elimination round: \n'
+  output += '\nElimination round: \n'
 
   result.quarterfinals.forEach(matchup => {
     output += `    ${matchup.home} - ${matchup.away}\n`
@@ -468,10 +468,10 @@ function formatDrawOutput(result) {
 
 // Print the results and standings after the group stage 
 function printGroupStageResultsAndStandings(groupsData, pointsTable) {
-  console.log('Final Group Stage Standings:')
+  console.log('\n\nFinal Group Stage Standings:')
 
   for (const group in groupsData) {
-    console.log(`Group ${group}`)
+    console.log(`\nGroup ${group}`)
 
     const teamStats = []
 
@@ -537,14 +537,14 @@ function printFixturesByGroupPhase(groupFixtures, formUpdates) {
 
       groupFixtures[group][phase].forEach(match => {
         if (match.outcome === 'surrender') {
-          console.log(` ${match.match} - Outcome: ${match.outcome}, Surrendered Team: ${match.surrenderedTeam}`)
+          console.log(`   ${match.match} - Outcome: ${match.outcome}, Surrendered Team: ${match.surrenderedTeam}`)
         } else {
-          console.log(` ${match.match} (${match.score})`)
+          console.log(`   ${match.match} (${match.score})`)
 
           const matchUpdates = formUpdates[group].find(m => m.match === match.match)
           if (matchUpdates) {
             matchUpdates.formUpdates.forEach(update => {
-              console.log(` Form update for ${update.team}: ${update.from.toFixed(2)} -> ${update.to.toFixed(2)}`)
+              console.log(`     Form update for ${update.team}: ${update.from.toFixed(2)} -> ${update.to.toFixed(2)}`)
             })
           }
         }
@@ -554,7 +554,7 @@ function printFixturesByGroupPhase(groupFixtures, formUpdates) {
 }
 
 function displayFinalRanking(topTeams) {
-  console.log("Final Rankings:")
+  console.log("\nFinal Rankings:")
 
   for (let i = 0; i < topTeams.length; i++) {
     console.log(`${i + 1}. ${topTeams[i]}`)
@@ -564,7 +564,7 @@ function displayFinalRanking(topTeams) {
     }
   }
 
-  console.log(`Teams that advance to the knockout stage: ${topTeams.slice(0, 8).join(", ")}`)
+  console.log(`\nTeams that advance to the knockout stage: ${topTeams.slice(0, 8).join(", ")}\n`)
 }
 
 function simulateQuarterfinalMatches(quarterfinalTeams, FIBARankings, teamForm) {
@@ -589,15 +589,14 @@ function simulateQuarterfinalMatches(quarterfinalTeams, FIBARankings, teamForm) 
 
     if (outcome.outcome === 'surrender') {
       result.surrenderedTeam = team1Score > team2Score ? team2.TeamName : team1.TeamName
+      winners.push(team1Score > team2Score ? team1 : team2)
     } else {
       result.score = `${team1Score}:${team2Score}`
+      winners.push(team1Score > team2Score ? team1 : team2)
+      adjustTeamFormBasedOnMatchOutcome(team1.ISOCode, team2.ISOCode, team1Score, team2Score, teamForm)
     }
 
     quarterfinalResults.push(result)
-
-    const winner = outcome.outcome === 'surrender' ? (team1Score > team2Score ? team2 : team1) : (team1Score > team2Score ? team1 : team2)
-
-    winners.push(winner)
 
     adjustTeamFormBasedOnMatchOutcome(team1.ISOCode, team2.ISOCode, team1Score, team2Score, teamForm)
   }
@@ -610,22 +609,20 @@ function printQuarterfinalResults(results) {
 
   results.forEach(result => {
     if (result.outcome === 'surrender') {
-      console.log(`${result.match} (Surrendered by: ${result.surrenderedTeam})`)
+      console.log(`    ${result.match} (Surrendered by: ${result.surrenderedTeam})`)
     } else {
-      console.log(`${result.match} (${result.score})`)
+      console.log(`    ${result.match} (${result.score})`)
     }
   })
 }
 
 function determineSemifinalMatches(winners) {
-  const shuffledWinners = winners.sort(() => Math.random() - 0.5)
-
-  const semfifinals = [
-    [shuffledWinners[0], shuffledWinners[1]],
-    [shuffledWinners[2], shuffledWinners[3]]
+  const semifinals = [
+    [winners[0], winners[2]],
+    [winners[1], winners[3]]
   ]
 
-  return semfifinals
+  return semifinals
 }
 
 function simulateSemifinalMatches(semifinalTeams, FIBARankings, teamForm) {
@@ -640,22 +637,30 @@ function simulateSemifinalMatches(semifinalTeams, FIBARankings, teamForm) {
 
     const result = {
       match: `${team1.TeamName} - ${team2.TeamName}`,
-      score: outcome.outcome === 'surrender' ? '' : `${team1Score}:${team2Score}`,
       outcome: outcome.outcome
     }
 
     if (outcome.outcome === 'surrender') {
       result.surrenderedTeam = team1Score > team2Score ? team2.TeamName : team1.TeamName
+
+      const winner = team1Score > team2Score ? team1 : team2
+      const loser = team1Score > team2Score ? team2 : team1
+
+      finalists.push(winner)
+      losers.push(loser)
+    } else {
+      result.score = `${team1Score}:${team2Score}`
+
+      const winner = team1Score > team2Score ? team1 : team2
+      const loser = team1Score > team2Score ? team2 : team1
+
+      finalists.push(winner)
+      losers.push(loser)
+
+      adjustTeamFormBasedOnMatchOutcome(team1.ISOCode, team2.ISOCode, team1Score, team2Score, teamForm)
     }
 
     semifinalResults.push(result)
-
-    const winner = outcome.outcome === 'surrender' ? (team1Score > team2Score ? team2 : team1) : (team1Score > team2Score ? team1 : team2)
-    const loser = outcome.outcome === 'surrender' ? (team1Score > team2Score ? team1 : team2) : (team1Score > team2Score ? team2 : team1)
-
-    finalists.push(winner)
-    losers.push(loser)
-
 
     adjustTeamFormBasedOnMatchOutcome(team1.ISOCode, team2.ISOCode, team1Score, team2Score, teamForm)
   }
@@ -664,13 +669,13 @@ function simulateSemifinalMatches(semifinalTeams, FIBARankings, teamForm) {
 }
 
 function printSemifinalResults(results) {
-  console.log("Semifinals:")
+  console.log("\nSemifinals:")
 
   results.forEach(result => {
     if (result.outcome === 'surrender') {
-      console.log(`${result.match} (Surrenderd by: ${result.surrenderedTeam})`)
+      console.log(`    ${result.match} (Surrenderd by: ${result.surrenderedTeam})`)
     } else {
-      console.log(`${result.match} (${result.score})`)
+      console.log(`    ${result.match} (${result.score})`)
     }
   })
 }
@@ -683,31 +688,38 @@ function simulateFinalMatch(winners, FIBARankings, teamForm) {
 
   const finalResult = {
     match: `${team1.TeamName} - ${team2.TeamName}`,
-    score: finalOutcome.outcome === 'surrender' ? '' : `${finalScore1}:${finalScore2}`,
     outcome: finalOutcome.outcome,
-    winner: finalScore1 > finalScore2 ? team1 : team2,
-    loser: finalScore1 < finalScore2 ? team1 : team2
+    winner: null,
+    loser: null,
+    score: ''
   }
 
   if (finalOutcome.outcome === 'surrender') {
     finalResult.surrenderedTeam = finalScore1 > finalScore2 ? team2.TeamName : team1.TeamName
+    finalResult.winner = finalScore1 > finalScore2 ? team1 : team2
+    finalResult.loser = finalScore1 > finalScore2 ? team2 : team1
+  } else {
+    finalResult.score = `${finalScore1}:${finalScore2}`
+    finalResult.winner = finalScore1 > finalScore2 ? team1 : team2
+    finalResult.loser = finalScore1 > finalScore2 ? team2 : team1
+
+    adjustTeamFormBasedOnMatchOutcome(team1.ISOCode, team2.ISOCode, finalScore1, finalScore2, teamForm)
   }
 
   return { finalResult, finalWinner: finalResult.winner, finalLoser: finalResult.loser }
 }
 
-function formatFinalMatch(finalResult) {
-  let finalOutput = "Final:\n"
+function printFinalMatch(finalResult) {
+  let finalOutput = "\nFinal:\n"
 
   if (finalResult.outcome === 'surrender') {
-    finalOutput += `${finalResult.match} (Surrendered by: ${finalResult.surrenderedTeam})\n`
+    finalOutput += `    ${finalResult.match} (Surrendered by: ${finalResult.surrenderedTeam})\n`
   } else {
-    finalOutput += `${finalResult.match} (${finalResult.score})\n`;
+    finalOutput += `    ${finalResult.match} (${finalResult.score})\n`
   }
 
   console.log(finalOutput)
 }
-
 
 function simulateThirdPlaceMatch(losers, FIBARankings, teamForm) {
   const [team1, team2] = losers
@@ -717,26 +729,32 @@ function simulateThirdPlaceMatch(losers, FIBARankings, teamForm) {
 
   const thirdPlaceResult = {
     match: `${team1.TeamName} vs ${team2.TeamName}`,
-    score: thirdPlaceOutcome.outcome === 'surrender' ? '' : `${thirdPlaceScore1}:${thirdPlaceScore2}`,
     outcome: thirdPlaceOutcome.outcome,
+    score: ''
   }
+
+  let thirdPlaceWinner
 
   if (thirdPlaceOutcome.outcome === 'surrender') {
     thirdPlaceResult.surrenderedTeam = thirdPlaceScore1 > thirdPlaceScore2 ? team2.TeamName : team1.TeamName
-  }
+    thirdPlaceWinner = thirdPlaceScore1 > thirdPlaceScore2 ? team1 : team2
+  } else {
+    thirdPlaceResult.score = `${thirdPlaceScore1}:${thirdPlaceScore2}`
+    thirdPlaceWinner = thirdPlaceScore1 > thirdPlaceScore2 ? team1 : team2
 
-  const thirdPlaceWinner = thirdPlaceOutcome.outcome === 'surrender' ? (thirdPlaceScore1 > thirdPlaceScore2 ? team2 : team1) : (thirdPlaceScore1 > thirdPlaceScore2 ? team1 : team2)
+    adjustTeamFormBasedOnMatchOutcome(team1.ISOCode, team2.ISOCode, thirdPlaceScore1, thirdPlaceScore2, teamForm)
+  }
 
   return { thirdPlaceResult, thirdPlaceWinner }
 }
 
 function printThirdPlaceMatch(result) {
-  console.log("Third Place Match:")
+  console.log("\nThird Place Match:")
 
   if (result.outcome === 'surrender') {
-    console.log(`${result.match} (Surrendered by: ${result.surrenderedTeam})`)
+    console.log(`    ${result.match} (Surrendered by: ${result.surrenderedTeam})`)
   } else {
-    console.log(`${result.match} (${result.score})`)
+    console.log(`    ${result.match} (${result.score})`)
   }
 }
 
@@ -786,7 +804,7 @@ async function simulateTournament() {
 
     const knockoutTeams = determineKnockoutStageSeedings(rankedTeams, groupsData)
 
-    formatDrawOutput(knockoutTeams)
+    printDraw(knockoutTeams)
 
     const knockoutTeamsInfo = knockoutTeams.quarterfinals.reduce((result, match) => {
       [match.home, match.away].forEach(teamName => {
@@ -812,11 +830,11 @@ async function simulateTournament() {
     const { semifinalResults, finalists, losers } = simulateSemifinalMatches(semifinalTeams, FIBARankings, teamForm)
     printSemifinalResults(semifinalResults)
 
-    const { thirdPlaceResult, thirdPlaceWinner } = simulateThirdPlaceMatch(losers, FIBARankings, teamForm);
+    const { thirdPlaceResult, thirdPlaceWinner } = simulateThirdPlaceMatch(losers, FIBARankings, teamForm)
     printThirdPlaceMatch(thirdPlaceResult)
 
     const { finalResult, finalWinner, finalLoser } = simulateFinalMatch(finalists, FIBARankings, teamForm)
-    formatFinalMatch(finalResult)
+    printFinalMatch(finalResult)
 
     printMedalStandings(finalWinner, finalLoser, thirdPlaceWinner)
   } catch (err) {
