@@ -94,8 +94,8 @@ function simulateGroupStageMatches(groupsData, FIBARankings, teamForm, pointsTab
         adjustTeamFormBasedOnMatchOutcome(team1.ISOCode, team2.ISOCode, team1Score, team2Score, teamForm)
 
         formUpdates[group].push({
-          match: `${team1.Team} vs ${team2.Team}`,
-          score: `${Math.round(team1Score)}-${Math.round(team2Score)}`,
+          match: `${team1.Team} - ${team2.Team}`,
+          score: `${Math.round(team1Score)}:${Math.round(team2Score)}`,
           formUpdates: [
             { team: team1.Team, from: originalFormTeam1, to: teamForm[team1.ISOCode] },
             { team: team2.Team, from: originalFormTeam2, to: teamForm[team2.ISOCode] }
@@ -103,8 +103,8 @@ function simulateGroupStageMatches(groupsData, FIBARankings, teamForm, pointsTab
         })
 
         fixtureMatches.push({
-          match: `${team1.Team} vs ${team2.Team}`,
-          score: `${Math.round(team1Score)}-${Math.round(team2Score)}`,
+          match: `${team1.Team} - ${team2.Team}`,
+          score: `${Math.round(team1Score)}:${Math.round(team2Score)}`,
           outcome: outcome,
           surrenderedTeam: surrenderedTeam ? teams.find(team => team.ISOCode === surrenderedTeam).Team : null
         })
@@ -118,7 +118,6 @@ function simulateGroupStageMatches(groupsData, FIBARankings, teamForm, pointsTab
   }
 
   rankTeamsWithinGroups(groupsData, pointsTable, groupFixtures)
-
 
   return { groupFixtures, formUpdates }
 }
@@ -464,7 +463,7 @@ function formatDrawOutput(result) {
     output += `    ${matchup.home} - ${matchup.away}\n`
   })
 
-  return output
+  console.log(output)
 }
 
 // Print the results and standings after the group stage 
@@ -568,14 +567,63 @@ function displayFinalRanking(topTeams) {
   console.log(`Teams that advance to the knockout stage: ${topTeams.slice(0, 8).join(", ")}`)
 }
 
-async function main() {
+function simulateQuarterfinalMatches(quarterfinalTeams, FIBARankings, teamForm) {
+  const quarterfinalResults = []
+  const winners = []
+
+  const teamList = Object.values(quarterfinalTeams)
+
+  // Kroz timove u parovima
+  for (let i = 0; i < teamList.length; i += 2) {
+    const team1 = teamList[i]
+    const team2 = teamList[i + 1]
+
+    const [team1Score, team2Score] = determineMatchOutcome(team1.ISOCode, team2.ISOCode, FIBARankings, teamForm)
+
+    const outcome = getMatchOutcome(team1.ISOCode, team2.ISOCode, team1Score, team2Score)
+
+    const result = {
+      match: `${team1.TeamName} - ${team2.TeamName}`,
+      outcome: outcome.outcome,
+    }
+
+    if (outcome.outcome === 'surrender') {
+      result.surrenderedTeam = team1Score > team2Score ? team2.TeamName : team1.TeamName
+    } else {
+      result.score = `${team1Score}:${team2Score}`
+    }
+
+    quarterfinalResults.push(result)
+
+    const winner = outcome.outcome === 'surrender' ? (team1Score > team2Score ? team2 : team1) : (team1Score > team2Score ? team1 : team2)
+
+    winners.push(winner)
+
+    adjustTeamFormBasedOnMatchOutcome(team1.ISOCode, team2.ISOCode, team1Score, team2Score, teamForm)
+  }
+
+  return { quarterfinalResults, winners }
+}
+
+function printQuarterfinalResults(results) {
+  console.log("Quarterfinals:")
+
+  results.forEach(result => {
+    if (result.outcome === 'surrender') {
+      console.log(`${result.match} (Surrendered by: ${result.surrenderedTeam})`)
+    } else {
+      console.log(`${result.match} (${result.score})`)
+    }
+  })
+}
+
+async function simulateTournament() {
   try {
     const groupsData = await readJSONFile(path.join(__dirname, 'groups.json'))
     const exhibitionData = await readJSONFile(path.join(__dirname, 'exhibitions.json'))
 
     let teams = Object.keys(exhibitionData)
     const teamForm = simulateExhibitionMatches(exhibitionData, teams)
-
 
     const ISOToTeamName = {}
     for (const group of Object.values(groupsData)) {
@@ -607,11 +655,29 @@ async function main() {
 
     const knockoutTeams = determineKnockoutStageSeedings(rankedTeams, groupsData)
 
-    const formattedDraw = formatDrawOutput(knockoutTeams)
-    console.log(formattedDraw)
+    formatDrawOutput(knockoutTeams)
+
+    const knockoutTeamsInfo = knockoutTeams.quarterfinals.reduce((result, match) => {
+      [match.home, match.away].forEach(teamName => {
+        const ISOCode = Object.keys(ISOToTeamName).find(code => ISOToTeamName[code] === teamName)
+
+        if (ISOCode) {
+          result[ISOCode] = {
+            TeamName: teamName,
+            CurrentForm: parseFloat(teamForm[ISOCode].toFixed(2)),
+            Ranking: FIBARankings[ISOCode],
+            ISOCode: ISOCode
+          }
+        }
+      })
+      return result
+    }, {})
+
+    const { quarterfinalResults, winners } = simulateQuarterfinalMatches(knockoutTeamsInfo, FIBARankings, teamForm)
+    printQuarterfinalResults(quarterfinalResults)
   } catch (err) {
     console.error(err)
   }
 }
 
-main()
+simulateTournament()
