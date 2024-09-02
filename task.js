@@ -617,6 +617,137 @@ function printQuarterfinalResults(results) {
   })
 }
 
+function determineSemifinalMatches(winners) {
+  const shuffledWinners = winners.sort(() => Math.random() - 0.5)
+
+  const semfifinals = [
+    [shuffledWinners[0], shuffledWinners[1]],
+    [shuffledWinners[2], shuffledWinners[3]]
+  ]
+
+  return semfifinals
+}
+
+function simulateSemifinalMatches(semifinalTeams, FIBARankings, teamForm) {
+  const semifinalResults = []
+  const finalists = []
+  const losers = []
+
+  for (const [team1, team2] of semifinalTeams) {
+    const [team1Score, team2Score] = determineMatchOutcome(team1.ISOCode, team2.ISOCode, FIBARankings, teamForm)
+
+    let outcome = getMatchOutcome(team1.ISOCode, team2.ISOCode, team1Score, team2Score)
+
+    const result = {
+      match: `${team1.TeamName} - ${team2.TeamName}`,
+      score: outcome.outcome === 'surrender' ? '' : `${team1Score}:${team2Score}`,
+      outcome: outcome.outcome
+    }
+
+    if (outcome.outcome === 'surrender') {
+      result.surrenderedTeam = team1Score > team2Score ? team2.TeamName : team1.TeamName
+    }
+
+    semifinalResults.push(result)
+
+    const winner = outcome.outcome === 'surrender' ? (team1Score > team2Score ? team2 : team1) : (team1Score > team2Score ? team1 : team2)
+    const loser = outcome.outcome === 'surrender' ? (team1Score > team2Score ? team1 : team2) : (team1Score > team2Score ? team2 : team1)
+
+    finalists.push(winner)
+    losers.push(loser)
+
+
+    adjustTeamFormBasedOnMatchOutcome(team1.ISOCode, team2.ISOCode, team1Score, team2Score, teamForm)
+  }
+
+  return { semifinalResults, finalists, losers }
+}
+
+function printSemifinalResults(results) {
+  console.log("Semifinals:")
+
+  results.forEach(result => {
+    if (result.outcome === 'surrender') {
+      console.log(`${result.match} (Surrenderd by: ${result.surrenderedTeam})`)
+    } else {
+      console.log(`${result.match} (${result.score})`)
+    }
+  })
+}
+
+function simulateFinalMatch(winners, FIBARankings, teamForm) {
+  const [team1, team2] = winners
+
+  const [finalScore1, finalScore2] = determineMatchOutcome(team1.ISOCode, team2.ISOCode, FIBARankings, teamForm)
+  const finalOutcome = getMatchOutcome(team1.ISOCode, team2.ISOCode, finalScore1, finalScore2)
+
+  const finalResult = {
+    match: `${team1.TeamName} - ${team2.TeamName}`,
+    score: finalOutcome.outcome === 'surrender' ? '' : `${finalScore1}:${finalScore2}`,
+    outcome: finalOutcome.outcome,
+    winner: finalScore1 > finalScore2 ? team1 : team2,
+    loser: finalScore1 < finalScore2 ? team1 : team2
+  }
+
+  if (finalOutcome.outcome === 'surrender') {
+    finalResult.surrenderedTeam = finalScore1 > finalScore2 ? team2.TeamName : team1.TeamName
+  }
+
+  return { finalResult, finalWinner: finalResult.winner, finalLoser: finalResult.loser }
+}
+
+function formatFinalMatch(finalResult) {
+  let finalOutput = "Final:\n"
+
+  if (finalResult.outcome === 'surrender') {
+    finalOutput += `${finalResult.match} (Surrendered by: ${finalResult.surrenderedTeam})\n`
+  } else {
+    finalOutput += `${finalResult.match} (${finalResult.score})\n`;
+  }
+
+  console.log(finalOutput)
+}
+
+
+function simulateThirdPlaceMatch(losers, FIBARankings, teamForm) {
+  const [team1, team2] = losers
+
+  const [thirdPlaceScore1, thirdPlaceScore2] = determineMatchOutcome(team1.ISOCode, team2.ISOCode, FIBARankings, teamForm)
+  const thirdPlaceOutcome = getMatchOutcome(team1.ISOCode, team2.ISOCode, thirdPlaceScore1, thirdPlaceScore2)
+
+  const thirdPlaceResult = {
+    match: `${team1.TeamName} vs ${team2.TeamName}`,
+    score: thirdPlaceOutcome.outcome === 'surrender' ? '' : `${thirdPlaceScore1}:${thirdPlaceScore2}`,
+    outcome: thirdPlaceOutcome.outcome,
+  }
+
+  if (thirdPlaceOutcome.outcome === 'surrender') {
+    thirdPlaceResult.surrenderedTeam = thirdPlaceScore1 > thirdPlaceScore2 ? team2.TeamName : team1.TeamName
+  }
+
+  const thirdPlaceWinner = thirdPlaceOutcome.outcome === 'surrender' ? (thirdPlaceScore1 > thirdPlaceScore2 ? team2 : team1) : (thirdPlaceScore1 > thirdPlaceScore2 ? team1 : team2)
+
+  return { thirdPlaceResult, thirdPlaceWinner }
+}
+
+function printThirdPlaceMatch(result) {
+  console.log("Third Place Match:")
+
+  if (result.outcome === 'surrender') {
+    console.log(`${result.match} (Surrendered by: ${result.surrenderedTeam})`)
+  } else {
+    console.log(`${result.match} (${result.score})`)
+  }
+}
+
+function printMedalStandings(finalWinner, finalLoser, thirdPlaceWinner) {
+  console.log('Medals:')
+
+  console.log(`🥇 1. ${finalWinner.TeamName}`)
+  console.log(`🥈 2. ${finalLoser.TeamName}`)
+  console.log(`🥉 3. ${thirdPlaceWinner.TeamName}`)
+}
+
 async function simulateTournament() {
   try {
     const groupsData = await readJSONFile(path.join(__dirname, 'groups.json'))
@@ -675,6 +806,19 @@ async function simulateTournament() {
 
     const { quarterfinalResults, winners } = simulateQuarterfinalMatches(knockoutTeamsInfo, FIBARankings, teamForm)
     printQuarterfinalResults(quarterfinalResults)
+
+    const semifinalTeams = determineSemifinalMatches(winners)
+
+    const { semifinalResults, finalists, losers } = simulateSemifinalMatches(semifinalTeams, FIBARankings, teamForm)
+    printSemifinalResults(semifinalResults)
+
+    const { thirdPlaceResult, thirdPlaceWinner } = simulateThirdPlaceMatch(losers, FIBARankings, teamForm);
+    printThirdPlaceMatch(thirdPlaceResult)
+
+    const { finalResult, finalWinner, finalLoser } = simulateFinalMatch(finalists, FIBARankings, teamForm)
+    formatFinalMatch(finalResult)
+
+    printMedalStandings(finalWinner, finalLoser, thirdPlaceWinner)
   } catch (err) {
     console.error(err)
   }
