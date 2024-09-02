@@ -297,14 +297,26 @@ function getAllMatchesForGroup(groupFixtures, group) {
   return matches
 }
 
+/** Calculates the total round-robin difference for a specific team based on their match results
+ * @param {string} team - The name or identifier of the team whose round-robin difference is to be calculated
+ * @param {Array} matches - Array of match objects where each object contains details about the match
+ * @returns {number} - The total round-robin difference for the specified team
+ */
 function calculateRoundRobinDifference(team, matches) {
   let totalRoundRobinDifference = 0
 
   matches.forEach(match => {
+    // Check if the team is involved in the current match
     if (match.match.includes(team)) {
+      // Split the score string into individual scores and convert them to numbers
       const [score1, score2] = match.score.split('-').map(Number)
+
+      // Determine if the team is team1 or team2 in the match
       const isTeam1 = match.match.startsWith(team)
 
+      // Calculate the round-robin difference based on whether the team is team1 or team2
+      // If the team is team1, the difference is score1 - score2
+      // If the team is team2, the difference is score2 - score1
       totalRoundRobinDifference += isTeam1 ? (score1 - score2) : (score2 - score1)
     }
   })
@@ -312,7 +324,6 @@ function calculateRoundRobinDifference(team, matches) {
   return totalRoundRobinDifference
 }
 
-// Rank the top teams from each group to assign rankings for knockout stage seeding
 function rankTeamsAfterGroupStage(groupsData, pointsTable) {
   // Sort teams by metrics: points, score difference, and total points scored
   // Return an ordered list of teams for knockout seedings 
@@ -333,15 +344,23 @@ function rankTeamsAfterGroupStage(groupsData, pointsTable) {
   return rankedTeams
 }
 
+/** Rank the top teams from each group to assign rankings for knockout stage seeding
+* @param {Array} teams - Array of team names or identifiers to be ranked
+* @param {Object} pointsTable - Object mapping team names/identifiers to their performance metrics
+* @returns {Array} - Array of teams sorted by ranking criteria
+*/
 function rankTeamsByCriteria(teams, pointsTable) {
   return teams.sort((teamA, teamB) => {
+    // Retrieve the points for both teams from the pointsTable
     const pointsA = pointsTable[teamA].points
     const pointsB = pointsTable[teamB].points
 
+    // Compare teams based on points
     if (pointsA !== pointsB) {
-      return pointsB - pointsA
+      return pointsB - pointsA // Higher points are ranked higher
     }
 
+    // If points are equal, compare teams based on score difference
     const scoreDifferenceA = pointsTable[teamA].scoreDifference
     const scoreDifferenceB = pointsTable[teamB].scoreDifference
 
@@ -349,10 +368,11 @@ function rankTeamsByCriteria(teams, pointsTable) {
       return scoreDifferenceB - scoreDifferenceA
     }
 
+    // If both points and score difference are equal, compare teams based on scored points
     const scoredPointsA = pointsTable[teamA].scoredPoints
     const scoredPointsB = pointsTable[teamB].scoredPoints
 
-    return scoredPointsB - scoredPointsA
+    return scoredPointsB - scoredPointsA // Higher scored points are ranked higher
   })
 }
 
@@ -516,7 +536,7 @@ function adjustTeamFormBasedOnMatchOutcome(team1, team2, team1Score, team2Score,
   }
 }
 
-function displayInitialTeamForm(teamForm) {
+function printInitialTeamForm(teamForm) {
   console.log('Updated team form after exhibition matches:')
 
   for (const [team, form] of Object.entries(teamForm)) {
@@ -781,7 +801,7 @@ async function simulateTournament() {
       }
     }
 
-    displayInitialTeamForm(teamForm)
+    printInitialTeamForm(teamForm)
 
     const pointsTable = initializePointsTable(teams, ISOToTeamName)
 
@@ -803,14 +823,16 @@ async function simulateTournament() {
     displayFinalRanking(topTeams)
 
     const knockoutTeams = determineKnockoutStageSeedings(rankedTeams, groupsData)
-
     printDraw(knockoutTeams)
 
     const knockoutTeamsInfo = knockoutTeams.quarterfinals.reduce((result, match) => {
+      // For each match, process both the home and away teams
       [match.home, match.away].forEach(teamName => {
+        // Find the ISO code corresponding to the team name
         const ISOCode = Object.keys(ISOToTeamName).find(code => ISOToTeamName[code] === teamName)
 
         if (ISOCode) {
+          // Add the team information to the result object if ISO code is found
           result[ISOCode] = {
             TeamName: teamName,
             CurrentForm: parseFloat(teamForm[ISOCode].toFixed(2)),
